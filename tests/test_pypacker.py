@@ -2276,6 +2276,105 @@ class LACPTestCase(unittest.TestCase):
 		self.assertEqual(type(pkt.lacp.tlvlist[4]).__name__, "LACPReserved")
 		self.assertEqual(pkt.lacp.tlvlist[4].reserved, b"\x00" * 50)
 
+class COPE_TestCase(unittest.TestCase):
+	def test_eth(self):
+		print_header("ETHERNET")
+		# Ethernet without body
+		s = b"\x52\x54\x00\x12\x35\x02\x08\x00\x27\xa9\x93\x9e\x08\x00"
+		eth1 = ethernet.Ethernet(s)
+		# parsing
+		self.assertEqual(eth1.bin(), s)
+		self.assertEqual(eth1.dst_s, "52:54:00:12:35:02")
+		self.assertEqual(eth1.src_s, "08:00:27:A9:93:9E")
+		self.assertEqual(type(eth1.vlan).__name__, "TriggerList")
+		self.assertEqual(len(eth1.vlan), 0)
+
+		# Ethernet + IP
+		s = b"\x52\x54\x00\x12\x35\x02\x08\x00\x27\xa9\x93\x9e\x08\x00\x45\x00\x00\x37\xc5\x78" +\
+			b"\x40\x00\x40\x11\x9c\x81\x0a\x00\x02\x0f\x0a\x20\xc2\x8d"
+		eth2 = ethernet.Ethernet(s)
+		# parsing
+		self.assertEqual(eth2.bin(), s)
+		self.assertEqual(type(eth2.ip).__name__, "IP")
+		print("Ethernet with IP: %s -> %s" % (eth2.ip.src, eth2.ip.dst))
+		# reconstruate macs
+		eth1.src = b"\x52\x54\x00\x12\x35\x02"
+		eth1.dst = b"\x08\x00\x27\xa9\x93\x9e"
+		# direction
+		print("direction of eth: %d" % eth1.direction(eth1))
+		self.assertTrue(eth1.is_direction(eth1, pypacker.Packet.DIR_SAME))
+
+	def test_incomplete(self):
+		eth = ethernet.Ethernet(b"\x01\x80\xc2\x00\x00\x00,03\xa3\x9b\xc8\x00'")
+		print("%r" % eth)
+
+	def test_eth_vlan_tags(self):
+		print_header("ETHERNET + VLAN Tags")
+
+		# Ethernet + VLAN tag, type 0x8100 ) + ARP
+		# VALN tag: type=0x8100, prio=0, cfi=0, vid=5
+		s1 = b"\x00\x00\x00333\x00\x00 \x00\x10\x02\x81\x00\x00\x05\x08\x06\x00\x01" \
+			b"\x08\x00\x06\x04\x00\x01\x00\x00 \x00\x10\x02\x01\x01\x01\x01\x00\x00" \
+			b"\x00\x00\x00\x00\x01\x01\x01\x02"
+		eth1 = ethernet.Ethernet(s1)
+		# parsing
+		self.assertEqual(eth1.bin(), s1)
+		self.assertEqual(eth1.dst_s, "00:00:00:33:33:33")
+		self.assertEqual(eth1.src_s, "00:00:20:00:10:02")
+		self.assertEqual(eth1.type, ethernet.ETH_TYPE_ARP)
+		self.assertEqual(len(eth1.vlan), 1)
+		self.assertEqual(eth1.vlan[0].type, ethernet.ETH_TYPE_8021Q)
+		self.assertEqual(eth1.vlan[0].prio, 0)
+		self.assertEqual(eth1.vlan[0].cfi, 0)
+		self.assertEqual(eth1.vlan[0].vid, 5)
+		self.assertEqual(type(eth1.arp).__name__, "ARP")
+
+		# Ethernet + QinQ(double tags, type 0x8100 ) + IP
+		# Outer tag: type=0x8100, prio=1, cfi=1, vid=5
+		# Inner tag: type=0x8100, prio=2, cfi=0, vid=99
+		s = b"\x00\x00\x00\x00\x00\xaa\x00\x00\x00\x00\x00\xbb\x81\x000\x05\x81\x00@c" \
+			b"\x08\x00E\x00\x00&\x00\x01\x00\x00@\x00|\xd5\x7f\x00\x00\x01\x7f\x00\x00" \
+			b"\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+		eth1 = ethernet.Ethernet(s)
+		# parsing
+		self.assertEqual(eth1.bin(), s)
+		self.assertEqual(eth1.dst_s, "00:00:00:00:00:AA")
+		self.assertEqual(eth1.src_s, "00:00:00:00:00:BB")
+		self.assertEqual(eth1.type, ethernet.ETH_TYPE_IP)
+		self.assertEqual(len(eth1.vlan), 2)
+		self.assertEqual(eth1.vlan[0].type, ethernet.ETH_TYPE_8021Q)
+		self.assertEqual(eth1.vlan[0].prio, 1)
+		self.assertEqual(eth1.vlan[0].cfi, 1)
+		self.assertEqual(eth1.vlan[0].vid, 5)
+		self.assertEqual(eth1.vlan[1].type, ethernet.ETH_TYPE_8021Q)
+		self.assertEqual(eth1.vlan[1].prio, 2)
+		self.assertEqual(eth1.vlan[1].cfi, 0)
+		self.assertEqual(eth1.vlan[1].vid, 99)
+		self.assertEqual(type(eth1.ip).__name__, "IP")
+
+		# Ethernet + QinQ(double tags, type 0x9100 ) + IP
+		# Outer tag: type=0x8100, prio=7, cfi=1, vid=4000
+		# Inner tag: type=0x8100, prio=0, cfi=0, vid=1
+		s = b"\x00\x00\x00\x00\x00\xaa\x00\x00\x00\x00\x00\xbb\x91\x00\xff\xa0\x81\x00\x00" \
+			b"\x01\x08\x00E\x00\x00&\x00\x01\x00\x00@\x00|\xd5\x7f\x00\x00\x01\x7f\x00\x00" \
+			b"\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+		eth1 = ethernet.Ethernet(s)
+		# parsing
+		self.assertEqual(eth1.bin(), s)
+		self.assertEqual(eth1.dst_s, "00:00:00:00:00:AA")
+		self.assertEqual(eth1.src_s, "00:00:00:00:00:BB")
+		self.assertEqual(eth1.type, ethernet.ETH_TYPE_IP)
+		self.assertEqual(len(eth1.vlan), 2)
+		self.assertEqual(eth1.vlan[0].type, ethernet.ETH_TYPE_TUNNELING)
+		self.assertEqual(eth1.vlan[0].prio, 7)
+		self.assertEqual(eth1.vlan[0].cfi, 1)
+		self.assertEqual(eth1.vlan[0].vid, 4000)
+		self.assertEqual(eth1.vlan[1].type, ethernet.ETH_TYPE_8021Q)
+		self.assertEqual(eth1.vlan[1].prio, 0)
+		self.assertEqual(eth1.vlan[1].cfi, 0)
+		self.assertEqual(eth1.vlan[1].vid, 1)
+		self.assertEqual(type(eth1.ip).__name__, "IP")
+
 
 suite = unittest.TestSuite()
 loader = unittest.defaultTestLoader
@@ -2338,5 +2437,8 @@ suite.addTests(loader.loadTestsFromTestCase(ReaderNgTestCase))
 #suite.addTests(loader.loadTestsFromTestCase(SocketTestCase))
 #suite.addTests(loader.loadTestsFromTestCase(PerfTestPpcapBigfile))
 #suite.addTests(loader.loadTestsFromTestCase(PerfTestCase))
+
+# Added by Daniel Schoonwinkel
+suite.addTests(loader.loadTestsFromTestCase(COPE_TestCase))
 
 unittest.TextTestRunner().run(suite)
