@@ -11,7 +11,7 @@ from pypacker import pypacker, triggerlist
 from pypacker.pypacker import FIELD_FLAG_AUTOUPDATE, FIELD_FLAG_IS_TYPEFIELD
 
 # handler
-from pypacker.layer12 import arp, dtp, pppoe, llc, flow_control, lacp
+from pypacker.layer12 import arp, dtp, pppoe, llc, flow_control, lacp, COPE_packet
 from pypacker.layer3 import ip, ip6, ipx
 from pypacker.layer567 import ptpv2
 
@@ -31,6 +31,7 @@ ETH_MIN		= (ETH_LEN_MIN - ETH_HDR_LEN - ETH_CRC_LEN)
 # Ethernet payload types - http://standards.ieee.org/regauth/ethertype
 ETH_TYPE_PUP		= 0x0200		# PUP protocol
 ETH_TYPE_IP		= 0x0800		# IPv4 protocol
+ETH_TYPE_COPE		= 0x7123		# COPE Network Coding Protocol
 ETH_TYPE_ARP		= 0x0806		# address resolution protocol
 ETH_TYPE_WOL		= 0x0842		# Wake on LAN
 ETH_TYPE_CDP		= 0x2000		# Cisco Discovery Protocol
@@ -232,6 +233,7 @@ class Ethernet(pypacker.Packet):
 
 pypacker.Packet.load_handler(Ethernet,
 	{
+		ETH_TYPE_COPE: COPE_packet.COPE_packet,
 		ETH_TYPE_IP: ip.IP,
 		ETH_TYPE_ARP: arp.ARP,
 		ETH_TYPE_DTP: dtp.DTP,
