@@ -11,7 +11,7 @@ from pypacker import pypacker, triggerlist
 from pypacker.pypacker import FIELD_FLAG_AUTOUPDATE, FIELD_FLAG_IS_TYPEFIELD
 
 # handler
-from pypacker.layer12 import arp, dtp, pppoe, llc, flow_control, lacp, COPE_packet
+from pypacker.layer12 import arp, dtp, pppoe, llc, flow_control, lacp, cope
 from pypacker.layer3 import ip, ip6, ipx
 from pypacker.layer567 import ptpv2
 
@@ -233,7 +233,7 @@ class Ethernet(pypacker.Packet):
 
 pypacker.Packet.load_handler(Ethernet,
 	{
-		ETH_TYPE_COPE: COPE_packet.COPE_packet,
+		ETH_TYPE_COPE: cope.COPE_packet,
 		ETH_TYPE_IP: ip.IP,
 		ETH_TYPE_ARP: arp.ARP,
 		ETH_TYPE_DTP: dtp.DTP,
