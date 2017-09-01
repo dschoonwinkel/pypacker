@@ -14,6 +14,18 @@ def crc_hash(msg):
 def crc_checksum(msg):
 	return crc16(msg[:-2])
 
+def print_hex(title, payload):
+    if type(payload) == str:
+        hextext = title + ' '.join('%02X' % ord(x) for x in str(payload))
+        return hextext
+    elif type(payload) == bytes:
+        hextext = title + ' '.join('%02X' % x for x in payload)
+        return hextext
+    else:
+        raise Exception("Incompatible type")
+    # logging.debug(hextext)
+
+
 
 class EncodedHeader(pypacker.Packet):
 	__hdr__ = (
@@ -102,9 +114,12 @@ class COPE_packet(pypacker.Packet):
 	# 	"""Parse Encoded packets and return them as list."""
 		encoded_pkts = list()
 		# print("len(buf) %d"%len(buf))
+		# print(print_hex("buffer ", buf))
 		i = 0
 		while i < len(buf):
-			pkt = EncodedHeader(buf[i*ENCODEDHEADER_SIZE:i*ENCODEDHEADER_SIZE+ENCODEDHEADER_SIZE])
+			# print(i, i+ENCODEDHEADER_SIZE)
+			# print(print_hex("subbuffer ", buf[i:i+ENCODEDHEADER_SIZE]))
+			pkt = EncodedHeader(buf[i:i+ENCODEDHEADER_SIZE])
 			# print(pkt)
 			i += ENCODEDHEADER_SIZE
 			encoded_pkts.append(pkt)
@@ -119,7 +134,7 @@ class COPE_packet(pypacker.Packet):
 		# print("len(buf) %d"%len(buf))
 		i = 0
 		while i < len(buf):
-			pkt = ReportHeader(buf[i*REPORTHEADER_SIZE:i*REPORTHEADER_SIZE+REPORTHEADER_SIZE])
+			pkt = ReportHeader(buf[i:i+REPORTHEADER_SIZE])
 			# print(pkt)
 			i += REPORTHEADER_SIZE
 			reports.append(pkt)
@@ -134,7 +149,7 @@ class COPE_packet(pypacker.Packet):
 		# print("len(buf) %d"%len(buf))
 		i = 0
 		while i < len(buf):
-			pkt = ACKHeader(buf[i*ACKHEADER_SIZE:i*ACKHEADER_SIZE+ACKHEADER_SIZE])
+			pkt = ACKHeader(buf[i:i+ACKHEADER_SIZE])
 			# print(pkt)
 			i += ACKHEADER_SIZE
 			acks.append(pkt)
@@ -148,13 +163,19 @@ class COPE_packet(pypacker.Packet):
 
 	def get_pktid(self, neighbour):
 		for encoded_header in self.encoded_pkts:
-			if encoded_header.nexthop == neighbour:
+			if encoded_header.nexthop_s == neighbour:
 				return encoded_header.pkt_id
 
 	def check_nexthops(self, neighbour):
 		# Check if neighbour is addressed in this packet's nexthops
+		# print("\n\nStarting check_nexthops: len %d" % len(self.encoded_pkts))
+
 		for encoded_header in self.encoded_pkts:
-			if encoded_header.nexthop == neighbour:
+			# print("Encoded header.bin", encoded_header.bin())
+			# print("Encoded header pkt_id dec %d" % encoded_header.pkt_id)
+			# print("Encoded header", encoded_header)
+			if encoded_header.nexthop_s == neighbour:
+				# print("Encoded nexthop is me")
 				return True
 
 		return False
@@ -214,3 +235,15 @@ pypacker.Packet.load_handler(COPE_packet,
 		ETH_TYPE_IP: ip.IP
 	}
 )
+
+
+# Full Ethernet Test packet
+#ff ff ff ff ff ff 00 00 ff 00 00 01 71 23 00 02 11 29 8e 0d 3e 0d 3e 0d 00 00 00 00 00 02 11 2b 5e 0d 3e 0d 3e 0d 00 00 00 00 00 01 00 02 0a 00 00 02 00 00 00 01 01 0a 00 00 01 00 00 00 01 01 00 02 00 00 00 00 00 00 00 00 00 02 00 00 00 01 01 00 00 00 00 00 01 00 00 00 01 01 38 95 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 03 00 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+# COPE Test packets
+# 00 02 11 29 8e 0d 3e 0d 3e 0d 00 00 00 00 00 02 11 2b 5e 0d 3e 0d 3e 0d 00 00 00 00 00 01 00 02 0a 00 00 02 00 00 00 01 01 0a 00 00 01 00 00 00 01 01 00 02 00 00 00 00 00 00 00 00 00 02 00 00 00 01 01 00 00 00 00 00 01 00 00 00 01 01 38 95
+# b'\x00\x02\x11\x29\x8e\x0d\x3e\x0d\x3e\x0d\x00\x00\x00\x00\x00\x02\x11\x2b\x5e\x0d\x3e\x0d\x3e\x0d\x00\x00\x00\x00\x00\x01\x00\x02\x0a\x00\x00\x02\x00\x00\x00\x01\x01\x0a\x00\x00\x01\x00\x00\x00\x01\x01\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x01\x38\x95'
+
+# 2 Encoded packets test packet
+# 00 02 11 29 8E 0D 3E 0D 3E 0D 00 00 00 00 00 02 11 2B 5E 0D 3E 0D 3E 0D 00 00 00 00 00 01 00 00 00 00 00 00 00 00 E6 E1
+# b'\x00\x02\x11\x29\x8E\x0D\x3E\x0D\x3E\x0D\x00\x00\x00\x00\x00\x02\x11\x2B\x5E\x0D\x3E\x0D\x3E\x0D\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\xE6\xE1'

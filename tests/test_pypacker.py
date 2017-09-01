@@ -2,7 +2,7 @@ from pypacker import pypacker, checksum
 from pypacker.psocket import SocketHndl
 import pypacker.ppcap as ppcap
 import pypacker.pcapng as pcapng
-from pypacker.layer12 import arp, btle, dtp, ethernet, ieee80211, linuxcc, ppp, radiotap, stp, vrrp, flow_control, lldp
+from pypacker.layer12 import arp, btle, cope, dtp, ethernet, ieee80211, linuxcc, ppp, radiotap, stp, vrrp, flow_control, lldp
 from pypacker.layer3 import ip, ip6, ipx, icmp, igmp, ospf, pim
 from pypacker.layer4 import tcp, udp, ssl, sctp
 from pypacker.layer567 import diameter, dhcp, dns, hsrp, http, ntp, pmap, radius, rip, rtp, telnet, tpkt
@@ -2277,162 +2277,93 @@ class LACPTestCase(unittest.TestCase):
 		self.assertEqual(pkt.lacp.tlvlist[4].reserved, b"\x00" * 50)
 
 class COPE_TestCase(unittest.TestCase):
-	def test_eth(self):
-		print_header("ETHERNET")
-		# Ethernet without body
-		s = b"\x52\x54\x00\x12\x35\x02\x08\x00\x27\xa9\x93\x9e\x08\x00"
-		eth1 = ethernet.Ethernet(s)
-		# parsing
-		self.assertEqual(eth1.bin(), s)
-		self.assertEqual(eth1.dst_s, "52:54:00:12:35:02")
-		self.assertEqual(eth1.src_s, "08:00:27:A9:93:9E")
-		self.assertEqual(type(eth1.vlan).__name__, "TriggerList")
-		self.assertEqual(len(eth1.vlan), 0)
+	def test_bin(self):
+		print_header("COPE")
+		cope_pkt1 = cope.COPE_packet()
+		# Example encoded headers
+		encoded_header1 = cope.EncodedHeader(pkt_id=1236675760216686093, nexthop_s="00:00:00:00:00:02")
+		encoded_header2 = cope.EncodedHeader(pkt_id=1237185933611974157, nexthop_s="00:00:00:00:00:01")
 
-		# Ethernet + IP
-		s = b"\x52\x54\x00\x12\x35\x02\x08\x00\x27\xa9\x93\x9e\x08\x00\x45\x00\x00\x37\xc5\x78" +\
-			b"\x40\x00\x40\x11\x9c\x81\x0a\x00\x02\x0f\x0a\x20\xc2\x8d"
-		eth2 = ethernet.Ethernet(s)
-		# parsing
-		self.assertEqual(eth2.bin(), s)
-		self.assertEqual(type(eth2.ip).__name__, "IP")
-		print("Ethernet with IP: %s -> %s" % (eth2.ip.src, eth2.ip.dst))
-		# reconstruate macs
-		eth1.src = b"\x52\x54\x00\x12\x35\x02"
-		eth1.dst = b"\x08\x00\x27\xa9\x93\x9e"
-		# direction
-		print("direction of eth: %d" % eth1.direction(eth1))
-		self.assertTrue(eth1.is_direction(eth1, pypacker.Packet.DIR_SAME))
+		cope_pkt1.encoded_pkts.append(encoded_header1)
+		cope_pkt1.encoded_pkts.append(encoded_header2)
 
-	def test_incomplete(self):
-		eth = ethernet.Ethernet(b"\x01\x80\xc2\x00\x00\x00,03\xa3\x9b\xc8\x00'")
-		print("%r" % eth)
+		self.assertEquals(cope_pkt1.bin(), b'\x00\x02\x11\x29\x8E\x0D\x3E\x0D\x3E\x0D\x00\x00\x00\x00\x00\x02\x11\x2B\x5E\x0D\x3E\x0D\x3E\x0D\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\xE6\xE1')
 
-	def test_eth_vlan_tags(self):
-		print_header("ETHERNET + VLAN Tags")
+	def test_reconstruct(self):
+		cope_pkt1 = cope.COPE_packet()
+		# Example encoded headers
+		encoded_header1 = cope.EncodedHeader(pkt_id=1236675760216686093, nexthop_s="00:00:00:00:00:02")
+		encoded_header2 = cope.EncodedHeader(pkt_id=1237185933611974157, nexthop_s="00:00:00:00:00:01")
 
-		# Ethernet + VLAN tag, type 0x8100 ) + ARP
-		# VALN tag: type=0x8100, prio=0, cfi=0, vid=5
-		s1 = b"\x00\x00\x00333\x00\x00 \x00\x10\x02\x81\x00\x00\x05\x08\x06\x00\x01" \
-			b"\x08\x00\x06\x04\x00\x01\x00\x00 \x00\x10\x02\x01\x01\x01\x01\x00\x00" \
-			b"\x00\x00\x00\x00\x01\x01\x01\x02"
-		eth1 = ethernet.Ethernet(s1)
-		# parsing
-		self.assertEqual(eth1.bin(), s1)
-		self.assertEqual(eth1.dst_s, "00:00:00:33:33:33")
-		self.assertEqual(eth1.src_s, "00:00:20:00:10:02")
-		self.assertEqual(eth1.type, ethernet.ETH_TYPE_ARP)
-		self.assertEqual(len(eth1.vlan), 1)
-		self.assertEqual(eth1.vlan[0].type, ethernet.ETH_TYPE_8021Q)
-		self.assertEqual(eth1.vlan[0].prio, 0)
-		self.assertEqual(eth1.vlan[0].cfi, 0)
-		self.assertEqual(eth1.vlan[0].vid, 5)
-		self.assertEqual(type(eth1.arp).__name__, "ARP")
+		cope_pkt1.encoded_pkts.append(encoded_header1)
+		cope_pkt1.encoded_pkts.append(encoded_header2)
 
-		# Ethernet + QinQ(double tags, type 0x8100 ) + IP
-		# Outer tag: type=0x8100, prio=1, cfi=1, vid=5
-		# Inner tag: type=0x8100, prio=2, cfi=0, vid=99
-		s = b"\x00\x00\x00\x00\x00\xaa\x00\x00\x00\x00\x00\xbb\x81\x000\x05\x81\x00@c" \
-			b"\x08\x00E\x00\x00&\x00\x01\x00\x00@\x00|\xd5\x7f\x00\x00\x01\x7f\x00\x00" \
-			b"\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-		eth1 = ethernet.Ethernet(s)
-		# parsing
-		self.assertEqual(eth1.bin(), s)
-		self.assertEqual(eth1.dst_s, "00:00:00:00:00:AA")
-		self.assertEqual(eth1.src_s, "00:00:00:00:00:BB")
-		self.assertEqual(eth1.type, ethernet.ETH_TYPE_IP)
-		self.assertEqual(len(eth1.vlan), 2)
-		self.assertEqual(eth1.vlan[0].type, ethernet.ETH_TYPE_8021Q)
-		self.assertEqual(eth1.vlan[0].prio, 1)
-		self.assertEqual(eth1.vlan[0].cfi, 1)
-		self.assertEqual(eth1.vlan[0].vid, 5)
-		self.assertEqual(eth1.vlan[1].type, ethernet.ETH_TYPE_8021Q)
-		self.assertEqual(eth1.vlan[1].prio, 2)
-		self.assertEqual(eth1.vlan[1].cfi, 0)
-		self.assertEqual(eth1.vlan[1].vid, 99)
-		self.assertEqual(type(eth1.ip).__name__, "IP")
+		self.assertEquals(cope_pkt1.bin(), b'\x00\x02\x11\x29\x8E\x0D\x3E\x0D\x3E\x0D\x00\x00\x00\x00\x00\x02\x11\x2B\x5E\x0D\x3E\x0D\x3E\x0D\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\xE6\xE1')
 
-		# Ethernet + QinQ(double tags, type 0x9100 ) + IP
-		# Outer tag: type=0x8100, prio=7, cfi=1, vid=4000
-		# Inner tag: type=0x8100, prio=0, cfi=0, vid=1
-		s = b"\x00\x00\x00\x00\x00\xaa\x00\x00\x00\x00\x00\xbb\x91\x00\xff\xa0\x81\x00\x00" \
-			b"\x01\x08\x00E\x00\x00&\x00\x01\x00\x00@\x00|\xd5\x7f\x00\x00\x01\x7f\x00\x00" \
-			b"\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
-		eth1 = ethernet.Ethernet(s)
-		# parsing
-		self.assertEqual(eth1.bin(), s)
-		self.assertEqual(eth1.dst_s, "00:00:00:00:00:AA")
-		self.assertEqual(eth1.src_s, "00:00:00:00:00:BB")
-		self.assertEqual(eth1.type, ethernet.ETH_TYPE_IP)
-		self.assertEqual(len(eth1.vlan), 2)
-		self.assertEqual(eth1.vlan[0].type, ethernet.ETH_TYPE_TUNNELING)
-		self.assertEqual(eth1.vlan[0].prio, 7)
-		self.assertEqual(eth1.vlan[0].cfi, 1)
-		self.assertEqual(eth1.vlan[0].vid, 4000)
-		self.assertEqual(eth1.vlan[1].type, ethernet.ETH_TYPE_8021Q)
-		self.assertEqual(eth1.vlan[1].prio, 0)
-		self.assertEqual(eth1.vlan[1].cfi, 0)
-		self.assertEqual(eth1.vlan[1].vid, 1)
-		self.assertEqual(type(eth1.ip).__name__, "IP")
+		cope_pkt2 = cope.COPE_packet(cope_pkt1.bin())
+		print("Test prints: \n", cope_pkt2)
 
+	def test_reconstruct2(self):
+		cope_pkt1 = cope.COPE_packet(b'\x00\x02\x11\x29\x8e\x0d\x3e\x0d\x3e\x0d\x00\x00\x00\x00\x00\x02\x11\x2b\x5e\x0d\x3e\x0d\x3e\x0d\x00\x00\x00\x00\x00\x01\x00\x02\x0a\x00\x00\x02\x00\x00\x00\x01\x01\x0a\x00\x00\x01\x00\x00\x00\x01\x01\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x01\x38\x95')
+		print("Test prints: \n", cope_pkt1)
 
 suite = unittest.TestSuite()
 loader = unittest.defaultTestLoader
 
-suite.addTests(loader.loadTestsFromTestCase(DNSTestCase))
-suite.addTests(loader.loadTestsFromTestCase(DNS2TestCase))
-suite.addTests(loader.loadTestsFromTestCase(DHCPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(GeneralTestCase))
-suite.addTests(loader.loadTestsFromTestCase(AccessConcatTestCase))
-suite.addTests(loader.loadTestsFromTestCase(TelnetTestCase))
-suite.addTests(loader.loadTestsFromTestCase(HTTPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(SCTPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(PacketDumpTestCase))
-suite.addTests(loader.loadTestsFromTestCase(EthTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(DNSTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(DNS2TestCase))
+# suite.addTests(loader.loadTestsFromTestCase(DHCPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(GeneralTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(AccessConcatTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(TelnetTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(HTTPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(SCTPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(PacketDumpTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(EthTestCase))
 
-suite.addTests(loader.loadTestsFromTestCase(LinuxCookedCapture))
-suite.addTests(loader.loadTestsFromTestCase(CANTestCase))
-suite.addTests(loader.loadTestsFromTestCase(IPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(TCPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(ChecksumTestCase))
-suite.addTests(loader.loadTestsFromTestCase(UDPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(IP6TestCase))
-suite.addTests(loader.loadTestsFromTestCase(IterateTestCase))
-suite.addTests(loader.loadTestsFromTestCase(SimpleFieldActivateDeactivateTestCase))
-suite.addTests(loader.loadTestsFromTestCase(TriggerListTestCase))
-suite.addTests(loader.loadTestsFromTestCase(ICMPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(ICMP6TestCase))
+# suite.addTests(loader.loadTestsFromTestCase(LinuxCookedCapture))
+# suite.addTests(loader.loadTestsFromTestCase(CANTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(IPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(TCPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(ChecksumTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(UDPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(IP6TestCase))
+# suite.addTests(loader.loadTestsFromTestCase(IterateTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(SimpleFieldActivateDeactivateTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(TriggerListTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(ICMPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(ICMP6TestCase))
 
-suite.addTests(loader.loadTestsFromTestCase(StunTestCase))
-suite.addTests(loader.loadTestsFromTestCase(TFTPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(StunTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(TFTPTestCase))
 
-suite.addTests(loader.loadTestsFromTestCase(OSPFTestCase))
-suite.addTests(loader.loadTestsFromTestCase(PPPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(STPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(VRRPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(IGMPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(IPXTestCase))
-suite.addTests(loader.loadTestsFromTestCase(PIMTestCase))
-suite.addTests(loader.loadTestsFromTestCase(HSRPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(NTPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(RIPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(ReadWriteReadTestCase))
-suite.addTests(loader.loadTestsFromTestCase(RadiotapTestCase))
-suite.addTests(loader.loadTestsFromTestCase(DTPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(SSLTestCase))
-suite.addTests(loader.loadTestsFromTestCase(PTPv2TestCase))
-suite.addTests(loader.loadTestsFromTestCase(TPKTTestCase))
-suite.addTests(loader.loadTestsFromTestCase(PMAPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(RadiusTestCase))
-suite.addTests(loader.loadTestsFromTestCase(DiameterTestCase))
-suite.addTests(loader.loadTestsFromTestCase(BGPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(StaticsTestCase))
-suite.addTests(loader.loadTestsFromTestCase(ReaderTestCase))
-suite.addTests(loader.loadTestsFromTestCase(FlowControlTestCase))
-suite.addTests(loader.loadTestsFromTestCase(LLDPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(LACPTestCase))
-suite.addTests(loader.loadTestsFromTestCase(BTLETestcase))
-suite.addTests(loader.loadTestsFromTestCase(ReaderNgTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(OSPFTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(PPPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(STPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(VRRPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(IGMPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(IPXTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(PIMTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(HSRPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(NTPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(RIPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(ReadWriteReadTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(RadiotapTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(DTPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(SSLTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(PTPv2TestCase))
+# suite.addTests(loader.loadTestsFromTestCase(TPKTTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(PMAPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(RadiusTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(DiameterTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(BGPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(StaticsTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(ReaderTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(FlowControlTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(LLDPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(LACPTestCase))
+# suite.addTests(loader.loadTestsFromTestCase(BTLETestcase))
+# suite.addTests(loader.loadTestsFromTestCase(ReaderNgTestCase))
 #suite.addTests(loader.loadTestsFromTestCase(ReaderPcapNgTestCase))
 #suite.addTests(loader.loadTestsFromTestCase(SocketTestCase))
 #suite.addTests(loader.loadTestsFromTestCase(PerfTestPpcapBigfile))
